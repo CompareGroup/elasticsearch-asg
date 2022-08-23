@@ -18,6 +18,7 @@ func SetupLogging() *zap.Logger {
 		conf = zap.NewDevelopmentConfig()
 	} else {
 		conf = zap.NewProductionConfig()
+		conf.OutputPaths = []string{"stdout"}
 	}
 	// If the --verbose flag is set, log at the debug level.
 	if *verboseFlag {
@@ -25,7 +26,7 @@ func SetupLogging() *zap.Logger {
 	}
 	logger, err := conf.Build() // Convert logging config to logger.
 	if err != nil {
-		panic(err)
+		panic(any(err))
 	}
 	_ = zap.ReplaceGlobals(logger) // Set global zap logger. `zap.L()` will return this logger.
 	_ = zap.RedirectStdLog(logger) // Redirect stdlib logger (`log` package) to zap logger.

@@ -45,7 +45,7 @@ func LoadTestData(name string) string {
 	path := filepath.Join("testdata", name) // relative path
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
-		panic(fmt.Sprintf("failed to load test data file %s: %s", name, err))
+		panic(any(fmt.Sprintf("failed to load test data file %s: %s", name, err)))
 	}
 	return string(data)
 }
@@ -67,5 +67,5 @@ func ClientTestSetup(t *testing.T) (ctx context.Context, logger *zap.Logger, tea
 		teardownLogging()
 	}
 
-	return
+	return ctx, logger, teardown
 }

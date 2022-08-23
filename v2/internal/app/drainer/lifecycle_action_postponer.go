@@ -3,6 +3,7 @@ package drainer
 import (
 	"context"
 	goerrors "errors"
+	"github.com/aws/aws-sdk-go-v2/service/autoscaling/types"
 	"strings"
 	"time"
 
@@ -10,9 +11,8 @@ import (
 	"go.uber.org/zap"                // Logging.
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/aws/awserr"
 	"github.com/aws/aws-sdk-go-v2/service/autoscaling"
-	"github.com/aws/aws-sdk-go-v2/service/autoscaling/autoscalingiface"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 )
 
 var (
@@ -28,12 +28,12 @@ var (
 // LifecycleActionPostponer prevents LifecycleActions from timing out.
 // See the Postpone method for more details.
 type LifecycleActionPostponer struct {
-	client             autoscalingiface.ClientAPI
+	client             autoscaling.Client
 	lifecycleHookCache *ristretto.Cache
 }
 
 // NewLifecycleActionPostponer returns a new LifecycleActionPostponer.
-func NewLifecycleActionPostponer(client autoscalingiface.ClientAPI) *LifecycleActionPostponer {
+func NewLifecycleActionPostponer(client autoscaling.Client) *LifecycleActionPostponer {
 	// TODO: move this out of a global variable.
 	lifecycleHookCache, err := ristretto.NewCache(&ristretto.Config{
 		NumCounters: 10 * 10,
@@ -58,7 +58,7 @@ func NewLifecycleActionPostponer(client autoscalingiface.ClientAPI) *LifecycleAc
 // in the AWS API) then ErrLifecycleActionTimeout will be returned.
 //
 // See also: https://docs.aws.amazon.com/autoscaling/ec2/userguide/lifecycle-hooks.html#lifecycle-hooks-overview
-func (lap *LifecycleActionPostponer) Postpone(ctx context.Context, c autoscalingiface.ClientAPI, a *LifecycleAction) error {
+func (lap *LifecycleActionPostponer) Postpone(ctx context.Context, c autoscaling.Client, a *LifecycleAction) error {
 	// Get Lifecycle Hook description because we need to know
 	// what the timeout for each action it.
 	hook, err := lap.describeLifecycleHook(ctx, a.AutoScalingGroupName, a.LifecycleHookName)
@@ -66,8 +66,8 @@ func (lap *LifecycleActionPostponer) Postpone(ctx context.Context, c autoscaling
 		return err
 	}
 
-	timeoutD := time.Duration(aws.Int64Value(hook.HeartbeatTimeout)) * time.Second
-	globalTimeoutD := time.Duration(aws.Int64Value(hook.GlobalTimeout)) * time.Second
+	timeoutD := time.Duration(*hook.HeartbeatTimeout) * time.Second
+	globalTimeoutD := time.Duration(*hook.GlobalTimeout) * time.Second
 	timeout := a.Start.Add(timeoutD)
 	globalTimeout := time.NewTimer(globalTimeoutD)
 	defer globalTimeout.Stop()
@@ -91,8 +91,7 @@ func (lap *LifecycleActionPostponer) Postpone(ctx context.Context, c autoscaling
 			return ctx.Err()
 
 		case <-halfWayToTimeout.C:
-			req := c.RecordLifecycleActionHeartbeatRequest(heartbeatInput)
-			_, err := req.Send(ctx)
+			_, err := c.RecordLifecycleActionHeartbeat(ctx, heartbeatInput)
 			if aerr, ok := err.(awserr.Error); ok {
 				code := aerr.Code()
 				msg := aerr.Message()
@@ -118,33 +117,46 @@ func (lap *LifecycleActionPostponer) Postpone(ctx context.Context, c autoscaling
 
 // describeLifecycleHook fetches a description of an AWS AutoScaling Group
 // Lifecycle Hook.
-func (lap *LifecycleActionPostponer) describeLifecycleHook(ctx context.Context, groupName, hookName string) (*autoscaling.LifecycleHook, error) {
-	var hook *autoscaling.LifecycleHook
+func (lap *LifecycleActionPostponer) describeLifecycleHook(ctx context.Context, groupName, hookName string) (types.LifecycleHook, error) {
+	var hook types.LifecycleHook
+
 	cacheKey := groupName + ":" + hookName
 	entry, ok := lap.lifecycleHookCache.Get(cacheKey)
 	if ok {
-		hook = entry.(*autoscaling.LifecycleHook)
+		hook = entry.(types.LifecycleHook)
 		zap.L().Debug("got lifecycle hook from cache",
 			zap.String("autoscaling_group", *hook.AutoScalingGroupName),
 			zap.String("lifecycle_hook", *hook.LifecycleHookName))
+
 	} else {
-		req := lap.client.DescribeLifecycleHooksRequest(&autoscaling.DescribeLifecycleHooksInput{
+		params := autoscaling.DescribeLifecycleHooksInput{
 			AutoScalingGroupName: aws.String(groupName),
 			LifecycleHookNames:   []string{hookName},
-		})
-		resp, err := req.Send(ctx)
+		}
+
+		resp, err := lap.client.DescribeLifecycleHooks(
+			ctx,
+			&params,
+			)
+		//.DescribeLifecycleHooksRequest(&autoscaling.DescribeLifecycleHooksInput{
+		//		AutoScalingGroupName: aws.String(groupName),
+		//		LifecycleHookNames:   []string{hookName},
+		//	})
+		//resp, err := req.Send(ctx)
 		if err != nil {
-			return nil, err
+			return hook, err
 		}
 		if n := len(resp.LifecycleHooks); n != 1 {
 			zap.L().Panic("got wrong number of lifecycle hooks",
 				zap.Int("count", n))
 		}
-		hook = &resp.LifecycleHooks[0]
+		hook = resp.LifecycleHooks[0]
 		zap.L().Debug("described lifecycle hook",
 			zap.String("autoscaling_group", *hook.AutoScalingGroupName),
 			zap.String("lifecycle_hook", *hook.LifecycleHookName))
 		lap.lifecycleHookCache.Set(cacheKey, hook, 1)
+
 	}
 	return hook, nil
+
 }

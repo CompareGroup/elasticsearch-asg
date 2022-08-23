@@ -30,7 +30,7 @@ func (suite *ElasticsearchFacadeTestSuite) SetupTest() {
 	ctx, _, teardown := testutil.ClientTestSetup(suite.T())
 	c, err := elastic.NewSimpleClient()
 	if err != nil {
-		panic(err)
+		panic(any(err))
 	}
 	suite.Ctx = ctx
 	suite.SUT = NewElasticsearchFacade(c)
@@ -117,6 +117,9 @@ func (suite *ElasticsearchFacadeTestSuite) TestDrainNodes() {
 		node1Name          = "foo"
 		node2Name          = "bar"
 		sortedNodeNameList = "bar,foo"
+		node1Ip			   = "123.123.123.123"
+		node2Ip			   = "456.456.456.456"
+		sortedNodeIPList   = "123.123.123.123, 456.456.456.456"
 	)
 
 	// Drain a node.
@@ -130,11 +133,12 @@ func (suite *ElasticsearchFacadeTestSuite) TestDrainNodes() {
 
 		gock.New(elastic.DefaultURL).
 			Put("/_cluster/settings").
-			JSON(b{"transient": b{"cluster.routing.allocation.exclude._name": node1Name}}).
+			JSON(b{"transient": b{"cluster.routing.allocation.exclude._ip": node1Ip}}).
 			Reply(http.StatusOK).
-			JSON(b{"persistent": b{}, "transient": b{"cluster": b{"routing": b{"allocation": b{"exclude": b{"_name": node1Name}}}}}})
+			JSON(b{"persistent": b{}, "transient": b{"cluster": b{"routing": b{"allocation": b{"exclude": b{"_name": node1Ip}}}}}})
 
-		err := suite.SUT.DrainNodes(suite.Ctx, []string{node1Name})
+
+		err := suite.SUT.DrainNodes(suite.Ctx, []string{node1Ip})
 		suite.NoError(err)
 		suite.Condition(gock.IsDone)
 	})

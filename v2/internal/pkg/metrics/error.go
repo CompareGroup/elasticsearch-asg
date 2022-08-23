@@ -1,10 +1,10 @@
 package metrics
 
 import (
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"net/http"
 	"strconv"
 
-	"github.com/aws/aws-sdk-go-v2/aws/awserr"
 	elastic "github.com/olivere/elastic/v7" // Elasticsearch client.
 )
 

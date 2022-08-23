@@ -2,6 +2,8 @@ package drainer
 
 import (
 	"context"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	"github.com/aws/aws-sdk-go/aws/defaults"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -18,9 +20,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/autoscaling"
-	"github.com/aws/aws-sdk-go-v2/service/autoscaling/autoscalingiface"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
-	"github.com/aws/aws-sdk-go-v2/service/sqs/sqsiface"
 
 	"github.com/mintel/elasticsearch-asg/v2/internal/pkg/cmd"     // Common command line app tools.
 	"github.com/mintel/elasticsearch-asg/v2/internal/pkg/metrics" // Prometheus metrics tools.
@@ -31,7 +31,7 @@ const (
 	Name  = "drainer"
 	Usage = `Remove shards from Elasticsearch nodes on EC2 instances that are about to be terminated,
 either by an AWS AutoScaling Group downscaling or by Spot Instance interruption,
-by consuming CloudWatch Events from an SQS Queue. It assumes that Elasticsearch node names == EC2 instance ID.`
+by consuming CloudWatch Events from an SQS Queue. It assumes that Elasticsearch instance ids' == EC2 instance ID.`
 
 	_nodeAdded   = "node-added"
 	_nodeEmpty   = "node-empty"
@@ -52,8 +52,9 @@ type App struct {
 		Elasticsearch       *elastic.Client
 		ElasticsearchFacade *ElasticsearchFacade
 
-		SQS         sqsiface.ClientAPI
-		AutoScaling autoscalingiface.ClientAPI
+		SQS         *sqs.Client
+		AutoScaling *autoscaling.Client
+		EC2			*ec2.Client
 	}
 
 	clusterStateMu sync.RWMutex
@@ -61,6 +62,8 @@ type App struct {
 
 	events    *emitter.Emitter
 	postponer *LifecycleActionPostponer
+
+	logger	  *zap.Logger
 }
 
 // NewApp returns a new App.
@@ -94,7 +97,7 @@ func NewApp(r prometheus.Registerer) (*App, error) {
 		constLabels := map[string]string{"recipient": "elasticsearch"}
 		c, err := metrics.InstrumentHTTP(nil, r, namespace, constLabels)
 		if err != nil {
-			panic("error instrumenting HTTP client: " + err.Error())
+			panic(any("error instrumenting HTTP client: " + err.Error()))
 		}
 		app.clients.ElasticsearchHTTP = c
 		return nil
@@ -104,13 +107,14 @@ func NewApp(r prometheus.Registerer) (*App, error) {
 	// flags are parsed.
 	app.Action(func(*kingpin.ParseContext) error {
 		cfg := app.flags.AWSConfig()
-		err := metrics.InstrumentAWS(&cfg.Handlers, r, namespace, nil)
+		err := metrics.InstrumentAWS(defaults.Handlers(), r, namespace, nil)
 		if err != nil {
-			panic("error instrumenting AWS config: " + err.Error())
+			panic(any("error instrumenting AWS config: " + err.Error()))
 		}
-		app.clients.SQS = sqs.New(cfg)
-		app.clients.AutoScaling = autoscaling.New(cfg)
-		app.postponer = NewLifecycleActionPostponer(app.clients.AutoScaling)
+		app.clients.SQS = sqs.NewFromConfig(cfg)
+		app.clients.AutoScaling = autoscaling.NewFromConfig(cfg)
+		app.clients.EC2 = ec2.NewFromConfig(cfg)
+		app.postponer = NewLifecycleActionPostponer(*app.clients.AutoScaling)
 		app.health.AWSSessionCreated = true
 		return nil
 	})
@@ -122,6 +126,7 @@ func NewApp(r prometheus.Registerer) (*App, error) {
 // in main.main() after flag parsing.
 func (app *App) Main(g prometheus.Gatherer) {
 	logger := app.flags.NewLogger()
+	app.logger = logger
 	defer func() { _ = logger.Sync() }()
 	defer cmd.SetGlobalLogger(logger)()
 
@@ -171,7 +176,7 @@ func (app *App) Main(g prometheus.Gatherer) {
 	// Start consuming CloudWatch events from SQS.
 	eg.Go(func() error {
 		e := NewCloudWatchEventEmitter(
-			app.clients.SQS,
+			*app.clients.SQS,
 			app.flags.Queue.String(),
 			app.events,
 		)
@@ -253,7 +258,10 @@ func (app *App) handleSpotInterruptionEvent(ctx context.Context, batch []*events
 		d := e.Detail.(*events.EC2SpotInterruption)
 		ids[i] = d.InstanceID
 	}
-	return app.clients.ElasticsearchFacade.DrainNodes(ctx, ids)
+
+	privateIps := getPrivateIps(app.clients.EC2, app.logger, app.flags.ClusterName, ids)
+
+	return app.clients.ElasticsearchFacade.DrainNodes(ctx, privateIps)
 }
 
 // handleLifecycleTerminateActionEvent handles an AutoScaling Group Termination Lifecycle
@@ -267,8 +275,10 @@ func (app *App) handleLifecycleTerminateActionEvent(ctx context.Context, e *even
 		return err
 	}
 
+	privateIps := getPrivateIps(app.clients.EC2, app.logger, app.flags.ClusterName, []string{a.InstanceID})
+
 	zap.L().Info("draining node", zap.String("node", a.InstanceID))
-	err = app.clients.ElasticsearchFacade.DrainNodes(ctx, []string{a.InstanceID})
+	err = app.clients.ElasticsearchFacade.DrainNodes(ctx, privateIps)
 	if err != nil {
 		return err
 	}
@@ -329,7 +339,7 @@ func (app *App) handleLifecycleTerminateActionEvent(ctx context.Context, e *even
 	// Record the lifecycle action heartbeat.
 	err = app.postponer.Postpone(
 		postponeCtx,
-		app.clients.AutoScaling,
+		*app.clients.AutoScaling,
 		a,
 	)
 	switch err {
@@ -352,7 +362,7 @@ func (app *App) handleLifecycleTerminateActionEvent(ctx context.Context, e *even
 			zap.Error(err))
 		return nil
 	default:
-		// Some other error happend while recording the lifecycle
+		// Some other error happened while recording the lifecycle
 		// action heartbeat.
 		return err
 	}
@@ -361,14 +371,16 @@ func (app *App) handleLifecycleTerminateActionEvent(ctx context.Context, e *even
 	// allowing other autoscaling events to happen.
 	zap.L().Debug("completing termination lifecycle action",
 		zap.String("instance", a.InstanceID))
-	req := app.clients.AutoScaling.CompleteLifecycleActionRequest(&autoscaling.CompleteLifecycleActionInput{
-		AutoScalingGroupName:  aws.String(a.AutoScalingGroupName),
-		LifecycleHookName:     aws.String(a.LifecycleHookName),
-		InstanceId:            aws.String(a.InstanceID),
-		LifecycleActionToken:  aws.String(a.Token),
-		LifecycleActionResult: aws.String("CONTINUE"),
-	})
-	_, err = req.Send(context.Background())
+	_, err = app.clients.AutoScaling.CompleteLifecycleAction(
+		context.Background(),
+		&autoscaling.CompleteLifecycleActionInput{
+			AutoScalingGroupName:  aws.String(a.AutoScalingGroupName),
+			LifecycleHookName:     aws.String(a.LifecycleHookName),
+			InstanceId:            aws.String(a.InstanceID),
+			LifecycleActionToken:  aws.String(a.Token),
+			LifecycleActionResult: aws.String("CONTINUE"),
+		},
+	)
 	if err != nil {
 		// It's not really a problem if we can't complete the lifecycle event
 		// because it will timeout on its own eventually.
@@ -396,14 +408,14 @@ func (app *App) updateClusterState(ctx context.Context) error {
 
 	// Clean up drained nodes that are no longer in the cluster.
 	var toUndrain []string
-	for _, n := range newState.Exclusions.Name {
-		if !newState.HasNode(n) {
+	for _, n := range newState.Exclusions.IP {
+		if !newState.HasNodeByIP(n) {
 			toUndrain = append(toUndrain, n)
 			removed = append(removed, n)
 		}
 	}
 	if len(toUndrain) != 0 {
-		zap.L().Debug("undraining nodes",
+		zap.L().Info("undraining nodes",
 			zap.Strings("nodes", toUndrain))
 		if err := app.clients.ElasticsearchFacade.UndrainNodes(ctx, toUndrain); err != nil {
 			return errors.Wrap(err, "error while undraining nodes")
@@ -414,12 +426,12 @@ func (app *App) updateClusterState(ctx context.Context) error {
 	toWait := make(emitWaiter, 0, len(added)+len(removed)+len(newState.Nodes))
 	// Emit events for nodes added.
 	for _, n := range added {
-		zap.L().Debug("emit node added", zap.String("node", n))
+		zap.L().Info("emit node added", zap.String("node", n))
 		toWait = append(toWait, app.events.Emit(topicKey(_nodeAdded, n)))
 	}
 	// Emit events for nodes removed.
 	for _, n := range removed {
-		zap.L().Debug("emit node removed", zap.String("node", n))
+		zap.L().Info("emit node removed", zap.String("node", n))
 		toWait = append(toWait, app.events.Emit(topicKey(_nodeRemoved, n)))
 	}
 	// Emit events for nodes emptied.
@@ -447,3 +459,6 @@ func uniqStrings(strs ...string) []string {
 	}
 	return out
 }
+
+
+

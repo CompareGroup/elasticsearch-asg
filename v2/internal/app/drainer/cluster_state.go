@@ -1,6 +1,7 @@
 package drainer
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 
@@ -27,15 +28,15 @@ type ClusterState struct {
 func NewClusterState(i *elastic.NodesInfoResponse, s es.CatShardsResponse, set *es.ClusterGetSettingsResponse) *ClusterState {
 	nodes := make([]string, 0, len(i.Nodes))
 	for _, n := range i.Nodes {
-		nodes = append(nodes, n.Name)
+		nodes = append(nodes, n.IP)
 	}
 	sort.Strings(nodes)
 
 	shards := make(map[string]int, len(nodes))
 	for _, sr := range s {
-		if sr.Node != nil {
-			for _, node := range parseShardNodes(*sr.Node) {
-				shards[node]++
+		if sr.IP != nil {
+			for _, ip := range parseShardNodes(*sr.IP) {
+				shards[ip]++
 			}
 		}
 	}
@@ -55,6 +56,16 @@ func (s *ClusterState) HasNode(name string) bool {
 	}
 	i := sort.SearchStrings(s.Nodes, name)
 	return i < len(s.Nodes) && s.Nodes[i] == name
+}
+
+// HasNode returns true if a node with the given node is in
+// the Elasticsearch cluster.
+func (s *ClusterState) HasNodeByIP(instanceIp string) bool {
+	if !sort.StringsAreSorted(s.Nodes) {
+		zap.L().Panic("node slices must be sorted")
+	}
+	i := sort.SearchStrings(s.Nodes, instanceIp)
+	return i < len(s.Nodes) && s.Nodes[i] == instanceIp
 }
 
 // DiffNodes returns the difference between the nodes of two cluster states.
@@ -143,9 +154,14 @@ func parseShardNodes(node string) []string {
 	switch len(parts) {
 	case 1: // Example: "i-0968d7621b79cd73d"
 		return parts
-	case 5: // Example: "i-0968d7621b79cd73d -> 10.2.4.58 kNe49LLvSqGXBn2s8Ffgyw i-0a2ed08df0e5cfff6"
-		return []string{parts[0], parts[4]}
+	case 2,3,4,5:
+		fmt.Printf("parts are", parts)
+	case 6: // Example: "172.24.32.153 172-24-32-153-data-front-cg-p-prod -> 172.24.32.33 UNq6sOGNTxqyPEHJjj5haQ 172-24-32-33-data-front-cg-p-prod"
+		return []string{parts[0], parts[3]}
 	}
+	//case 5: // Example: "i-0968d7621b79cd73d -> 10.2.4.58 kNe49LLvSqGXBn2s8Ffgyw i-0a2ed08df0e5cfff6"
+	//	return []string{parts[0], parts[4]}
+	//}
 	zap.L().Panic("couldn't parse /_cat/shards response node name: " + node)
 	return nil
 }

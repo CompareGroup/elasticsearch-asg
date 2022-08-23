@@ -1,0 +1,70 @@
+###############################
+# STAGE 1 test and build binary
+###############################
+
+FROM golang:1.19 AS builder
+
+# Set Go build env vars
+ARG GOOS=linux
+ARG GOARCH=amd64
+ARG DLV_VERSION=v1.9.0
+ENV GOOS=${GOOS} GOARCH=${GOARCH}
+
+# Create a non-root user
+ARG GOUSER=appuser
+RUN adduser --gecos '' --disabled-password --no-create-home ${GOUSER}
+
+WORKDIR /go/src/app
+
+# Fetch dependencies
+# Do this first for caching sake
+ENV GO111MODULE=on
+COPY v2/go.mod v2/go.sum ./
+RUN go mod download
+
+# Copy source
+COPY v2/ .
+
+# Install/Update packages (after src COPY so it always happens)
+RUN apt-get update -y \
+    && apt-get upgrade -y \
+    && apt-get install -y ca-certificates tzdata \
+    && update-ca-certificates
+
+#debug settings
+RUN git clone https://github.com/go-delve/delve.git /go/src/github.com/go-delve/delve && \
+    cd /go/src/github.com/go-delve/delve && \
+    git checkout ${DLV_VERSION} && \
+    go install -ldflags "-X main.Build=$(git rev-parse HEAD) -extldflags \"-fno-PIC -static\"" -buildmode pie -tags 'osusergo netgo static_build' github.com/go-delve/delve/cmd/dlv
+
+RUN CGO_ENABLED=0 go build -gcflags "all=-N -l" -trimpath -o /go/bin/drainer ./cmd/drainer
+
+# Build the binary
+#RUN CGO_ENABLED=0 go build -gcflags "all=-N -l" -ldflags='-w -s' -trimpath -o /go/bin/drainer ./cmd/drainer
+
+##########################
+# STAGE 2 deployment image
+##########################
+FROM alpine:latest
+
+# Import from the builder.
+COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
+COPY --from=builder /etc/passwd /etc/passwd
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+
+# Copy our static executable.
+COPY --from=builder /go/bin/drainer /usr/bin/drainer
+COPY --from=builder /go/bin/dlv /usr/bin/dlv
+
+# Use an unprivileged user.
+USER ${GOUSER}
+
+# Expose healthcheck port.
+ENV PORT=8080
+EXPOSE $PORT 40000
+
+CMD ["/usr/bin/dlv", "--listen=:40000", "--headless=true", "--api-version=2", "--accept-multiclient", "exec", "usr/bin/drainer", "--", "--queue", "https://sqs.eu-central-1.amazonaws.com/807891339983/spot-termination-notifications", "--elasticsearch.url","http://data.front-cg-p-prod.int.cgcloud.eu:9200", "--aws.region=eu-central-1", "--aws.profile=cg-iac", "--log.level=DEBUG", "--cg.cluster=front-cg-p-prod"]
+#CMD ["usr/bin/drainer","--queue https://sqs.eu-central-1.amazonaws.com/807891339983/spot-termination-notifications", "--elasticsearch.url=http://data.front-cg-p-prod.int.cgcloud.eu:9200", "--aws.region=eu-central-1", "--aws.profile=cg-iac", "--log.level=DEBUG", "--cg.cluster=front-cg-p-prod"]
+#ENTRYPOINT ["/usr/bin/drainer"]
+
+#ENTRYPOINT ["tail", "-f", "/dev/null"]

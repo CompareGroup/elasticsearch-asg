@@ -83,8 +83,8 @@ func (e *ElasticsearchFacade) GetState(ctx context.Context) (*ClusterState, erro
 // Elasticsearch will being moving any data shards to other nodes.
 //
 // See also: https://www.elastic.co/guide/en/elasticsearch/reference/7.0/allocation-filtering.html
-func (e *ElasticsearchFacade) DrainNodes(ctx context.Context, names []string) error {
-	if len(names) == 0 {
+func (e *ElasticsearchFacade) DrainNodes(ctx context.Context, privateIps []string) error {
+	if len(privateIps) == 0 {
 		return nil
 	}
 
@@ -99,21 +99,21 @@ func (e *ElasticsearchFacade) DrainNodes(ctx context.Context, names []string) er
 	}
 
 	exclusions := es.NewShardAllocationExcludeSettings(settings.Transient)
-	sort.Strings(exclusions.Name)
-	for _, name := range names {
-		i := sort.SearchStrings(exclusions.Name, name) // Index in sorted slice where name should be.
-		if i < len(exclusions.Name) && exclusions.Name[i] == name {
+	sort.Strings(exclusions.IP)
+	for _, ip := range privateIps {
+		i := sort.SearchStrings(exclusions.IP, ip) // Index in sorted slice where name should be.
+		if i < len(exclusions.IP) && exclusions.IP[i] == ip {
 			// Node is already excluded from allocation.
 			return nil
 		}
 		// Insert name into slice (https://github.com/golang/go/wiki/SliceTricks#insert)
-		exclusions.Name = append(exclusions.Name, "")
-		copy(exclusions.Name[i+1:], exclusions.Name[i:])
-		exclusions.Name[i] = name
+		exclusions.IP = append(exclusions.IP, "")
+		copy(exclusions.IP[i+1:], exclusions.IP[i:])
+		exclusions.IP[i] = ip
 	}
 
-	// Ignore all node exclusion attributes other than node name.
-	exclusions.IP = nil
+	// Ignore all node exclusion attributes other than node ip.
+	exclusions.Name = nil
 	exclusions.Host = nil
 	exclusions.Attr = nil
 
@@ -128,17 +128,22 @@ func (e *ElasticsearchFacade) DrainNodes(ctx context.Context, names []string) er
 	return nil
 }
 
+
+
 // UndrainNodes reverses DrainNodes by removing from the list of nodes
 // excluded from shard allocation.
 //
 // See also: https://www.elastic.co/guide/en/elasticsearch/reference/7.0/allocation-filtering.html
-func (e *ElasticsearchFacade) UndrainNodes(ctx context.Context, names []string) error {
-	if len(names) == 0 {
+func (e *ElasticsearchFacade) UndrainNodes(ctx context.Context, instanceIPs []string) error {
+	if len(instanceIPs) == 0 {
 		return nil
 	}
 
 	e.settingsMu.Lock()
 	defer e.settingsMu.Unlock()
+
+	//privateIps := getPrivateIps(app, instanceIds)
+	privateIps := instanceIPs
 
 	settings, err := es.NewClusterGetSettingsService(e.c).
 		FilterPath("*." + es.ShardAllocExcludeSetting + ".*").
@@ -148,19 +153,19 @@ func (e *ElasticsearchFacade) UndrainNodes(ctx context.Context, names []string) 
 	}
 
 	exclusions := es.NewShardAllocationExcludeSettings(settings.Transient)
-	sort.Strings(exclusions.Name)
-	for _, name := range names {
-		i := sort.SearchStrings(exclusions.Name, name) // Index in sorted slice where name should be.
-		if i == len(exclusions.Name) || exclusions.Name[i] != name {
+	sort.Strings(exclusions.IP)
+	for _, ip := range privateIps {
+		i := sort.SearchStrings(exclusions.IP, ip) // Index in sorted slice where name should be.
+		if i == len(exclusions.IP) || exclusions.IP[i] != ip {
 			// Node is already absent from the shard allocation exclusion list.
 			return nil
 		}
 		// Remove nodeName from slice (https://github.com/golang/go/wiki/SliceTricks#delete)
-		exclusions.Name = exclusions.Name[:i+copy(exclusions.Name[i:], exclusions.Name[i+1:])]
+		exclusions.IP = exclusions.IP[:i+copy(exclusions.IP[i:], exclusions.IP[i+1:])]
 	}
 
-	// Ignore all node exclusion attributes other than node name.
-	exclusions.IP = nil
+	// Ignore all node exclusion attributes other than node instance ip.
+	exclusions.Name = nil
 	exclusions.Host = nil
 	exclusions.Attr = nil
 

@@ -12,7 +12,7 @@ import (
 func main() {
 	app, err := drainer.NewApp(prometheus.DefaultRegisterer)
 	if err != nil {
-		panic(err)
+		panic(any(err))
 	}
 	kingpin.MustParse(app.Parse(os.Args[1:]))
 	app.Main(prometheus.DefaultGatherer)

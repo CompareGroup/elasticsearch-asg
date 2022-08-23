@@ -21,7 +21,7 @@ func SetGlobalLoggerAt(logger *zap.Logger, stdLogLevel zapcore.Level) func() {
 	t1 := zap.ReplaceGlobals(logger)
 	t2, err := zap.RedirectStdLogAt(logger, stdLogLevel)
 	if err != nil {
-		panic(err)
+		panic(any(err))
 	}
 	return func() {
 		t2()

@@ -18,7 +18,7 @@ const (
 // exclusion settings of an Elasticsearch cluster.
 type ShardAllocationExcludeSettings struct {
 	Name, Host, IP []string
-	Attr           map[string][]string
+	Attr                       map[string][]string
 }
 
 // NewShardAllocationExcludeSettings creates a new shardAllocationExcludeSettings.

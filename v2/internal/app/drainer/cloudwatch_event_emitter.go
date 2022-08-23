@@ -3,6 +3,7 @@ package drainer
 import (
 	"context"
 	"encoding/json"
+	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
 	"strconv"
 
 	"github.com/olebedev/emitter"                    // Event bus.
@@ -12,7 +13,6 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
-	"github.com/aws/aws-sdk-go-v2/service/sqs/sqsiface"
 
 	"github.com/mintel/elasticsearch-asg/v2/pkg/events" // AWS CloudWatch Events.
 )
@@ -20,7 +20,7 @@ import (
 // CloudWatchEventEmitter consumes CloudWatch events from an SQS
 // queue and emits them as github.com/olebedev/emitter events.
 type CloudWatchEventEmitter struct {
-	client sqsiface.ClientAPI
+	client sqs.Client
 	queue  string
 	events *emitter.Emitter
 
@@ -30,7 +30,7 @@ type CloudWatchEventEmitter struct {
 }
 
 // NewCloudWatchEventEmitter returns a new CloudWatchEventEmitter.
-func NewCloudWatchEventEmitter(c sqsiface.ClientAPI, queueURL string, e *emitter.Emitter) *CloudWatchEventEmitter {
+func NewCloudWatchEventEmitter(c sqs.Client, queueURL string, e *emitter.Emitter) *CloudWatchEventEmitter {
 	return &CloudWatchEventEmitter{
 		client: c,
 		queue:  queueURL,
@@ -78,13 +78,13 @@ func (e *CloudWatchEventEmitter) Run(ctx context.Context) error {
 }
 
 // receive receives SQS messages.
-func (e *CloudWatchEventEmitter) receive(ctx context.Context) ([]sqs.Message, error) {
-	req := e.client.ReceiveMessageRequest(&sqs.ReceiveMessageInput{
+func (e *CloudWatchEventEmitter) receive(ctx context.Context) ([]types.Message, error) {
+	resp, err := e.client.ReceiveMessage(ctx, &sqs.ReceiveMessageInput{
 		QueueUrl:            aws.String(e.queue),
-		MaxNumberOfMessages: aws.Int64(10), // Max allowed by the AWS API.
-		WaitTimeSeconds:     aws.Int64(20), // Max allowed by the AWS API.
+		MaxNumberOfMessages: int32(10), // Max allowed by the AWS API.
+		WaitTimeSeconds:     int32(20), // Max allowed by the AWS API.
 	})
-	resp, err := req.Send(ctx)
+	//resp, err := req.Send(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "error getting SQS messages")
 	}
@@ -95,22 +95,22 @@ func (e *CloudWatchEventEmitter) receive(ctx context.Context) ([]sqs.Message, er
 }
 
 // delete deletes SQS messages.
-func (e *CloudWatchEventEmitter) delete(ctx context.Context, msgs []sqs.Message) error {
+func (e *CloudWatchEventEmitter) delete(ctx context.Context, msgs []types.Message) error {
 	if len(msgs) == 0 {
 		return nil
 	}
-	b := make([]sqs.DeleteMessageBatchRequestEntry, len(msgs))
+	b := make([]types.DeleteMessageBatchRequestEntry, len(msgs))
 	for i, m := range msgs {
-		b[i] = sqs.DeleteMessageBatchRequestEntry{
+		b[i] = types.DeleteMessageBatchRequestEntry{
+			//QueueUrl: aws.String(e.queue),
 			Id:            aws.String(strconv.Itoa(i)),
 			ReceiptHandle: m.ReceiptHandle,
 		}
 	}
-	req := e.client.DeleteMessageBatchRequest(&sqs.DeleteMessageBatchInput{
+	_, err := e.client.DeleteMessageBatch(ctx, &sqs.DeleteMessageBatchInput{
 		QueueUrl: aws.String(e.queue),
 		Entries:  b,
 	})
-	_, err := req.Send(ctx)
 	if err != nil {
 		return errors.Wrap(err, "error deleting SQS messages")
 	}

@@ -57,7 +57,7 @@ func (f *LoggingFlags) NewLogger() *zap.Logger {
 
 	logger, err := conf.Build()
 	if err != nil {
-		panic(fmt.Sprintf("error building logger: %s", err))
+		panic(any(fmt.Sprintf("error building logger: %s", err)))
 	}
 
 	return logger

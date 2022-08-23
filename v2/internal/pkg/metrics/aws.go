@@ -3,7 +3,7 @@ package metrics
 import (
 	"strconv"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/prometheus/client_golang/prometheus" // Prometheus metrics.
 )
 
@@ -23,7 +23,7 @@ import (
 //   sess := session.Must(session.NewSession())
 //   InstrumentAWS(&sess.Handlers, prometheus.DefaultRegisterer, "", nil)
 //
-func InstrumentAWS(h *aws.Handlers, reg prometheus.Registerer, namespace string, constLabels map[string]string) error {
+func InstrumentAWS(h request.Handlers, reg prometheus.Registerer, namespace string, constLabels map[string]string) error {
 	i := &awsInstrumentation{
 		duration: prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
@@ -47,11 +47,11 @@ func InstrumentAWS(h *aws.Handlers, reg prometheus.Registerer, namespace string,
 	if err := reg.Register(i); err != nil {
 		return err
 	}
-	h.Send.PushFrontNamed(aws.NamedHandler{
+	h.Send.PushFrontNamed(request.NamedHandler{
 		Name: "prometheus-send-start",
 		Fn:   i.handleSend,
 	})
-	h.Retry.PushFrontNamed(aws.NamedHandler{
+	h.Retry.PushFrontNamed(request.NamedHandler{
 		Name: "prometheus-retry",
 		Fn:   i.handleRetry,
 	})
@@ -75,20 +75,20 @@ func (i *awsInstrumentation) Collect(c chan<- prometheus.Metric) {
 	i.inflight.Collect(c)
 }
 
-func (i *awsInstrumentation) handleSend(r *aws.Request) {
+func (i *awsInstrumentation) handleSend(r *request.Request) {
 	labels := prometheus.Labels{
-		LabelRegion:    r.Config.Region,
+		LabelRegion:    *r.Config.Region,
 		LabelMethod:    r.Operation.HTTPMethod,
-		LabelService:   r.Metadata.ServiceName,
+		LabelService:   r.ClientInfo.ServiceName,
 		LabelOperation: r.Operation.Name,
 	}
 
 	timer := NewVecTimer(i.duration)
 	i.inflight.With(labels).Inc()
 
-	r.Handlers.Send.PushBackNamed(aws.NamedHandler{
+	r.Handlers.Send.PushBackNamed(request.NamedHandler{
 		Name: "prometheus-send-end",
-		Fn: func(r *aws.Request) {
+		Fn: func(r *request.Request) {
 			i.inflight.With(labels).Dec()
 			labels[LabelStatusCode] = strconv.Itoa(r.HTTPResponse.StatusCode)
 			timer.ObserveWith(labels)
@@ -96,20 +96,20 @@ func (i *awsInstrumentation) handleSend(r *aws.Request) {
 	})
 }
 
-func (i *awsInstrumentation) handleRetry(r *aws.Request) {
+func (i *awsInstrumentation) handleRetry(r *request.Request) {
 	labels := prometheus.Labels{
-		LabelRegion:    r.Config.Region,
+		LabelRegion:    *r.Config.Region,
 		LabelMethod:    r.Operation.HTTPMethod,
-		LabelService:   r.Metadata.ServiceName,
+		LabelService:   r.ClientInfo.ServiceName,
 		LabelOperation: r.Operation.Name,
 	}
 
 	timer := NewVecTimer(i.duration)
 	i.inflight.With(labels).Inc()
 
-	r.Handlers.AfterRetry.PushFrontNamed(aws.NamedHandler{
+	r.Handlers.AfterRetry.PushFrontNamed(request.NamedHandler{
 		Name: "prometheus-after-retry",
-		Fn: func(r *aws.Request) {
+		Fn: func(r *request.Request) {
 			i.inflight.With(labels).Dec()
 			labels[LabelStatusCode] = strconv.Itoa(r.HTTPResponse.StatusCode)
 			timer.ObserveWith(labels)

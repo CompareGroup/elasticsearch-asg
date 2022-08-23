@@ -97,3 +97,11 @@ Will build Docker images like `mintel/elasticsearch-cloudwatcher:1.2.3`.
 [CloudWatch Events]: https://docs.aws.amazon.com/AmazonCloudWatch/latest/events/WhatIsCloudWatchEvents.html
 [SQS Queue]: https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/welcome.html
 <!-- /Links -->
+
+
+Debug command
+--restart unless-stopped --privileged --security-opt "seccomp=unconfined" --cap-add=SYS_PTRACE
+
+
+Normal command overload command in docker container
+"--queue=https://sqs.eu-central-1.amazonaws.com/807891339983/es-spot-termination-notifications.fifo" "--elasticsearch.url=http://data.front-cg-p-prod.int.cgcloud.eu:9200" "--aws.region=eu-central-1" "--aws.profile=cg-iac" "--log.level=DEBUG"
