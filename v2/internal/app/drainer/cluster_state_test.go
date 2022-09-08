@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"   // Like assert but fails the test.
 	"github.com/tidwall/gjson"              // Dynamic JSON parsing.
 
-	"github.com/mintel/elasticsearch-asg/v2/pkg/es" // Extensions to the Elasticsearch client.
+	"github.com/CompareGroup/elasticsearch-asg/v2/pkg/es" // Extensions to the Elasticsearch client.
 )
 
 func TestNewClusterState(t *testing.T) {

@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/mintel/healthcheck"                  // Healthchecks framework.
+	"github.com/mintel/healthcheck"           // Healthchecks framework.
 	"github.com/prometheus/client_golang/prometheus" // Prometheus metrics.
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )

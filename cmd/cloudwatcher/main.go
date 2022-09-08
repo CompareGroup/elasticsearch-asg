@@ -15,8 +15,8 @@ import (
 	"github.com/aws/aws-sdk-go/service/cloudwatch"
 	"github.com/aws/aws-sdk-go/service/ec2"
 
-	esasg "github.com/mintel/elasticsearch-asg" // Complex Elasticsearch services
-	"github.com/mintel/elasticsearch-asg/cmd"   // Common logging setup func
+	esasg "github.com/CompareGroup/elasticsearch-asg" // Complex Elasticsearch services
+	"github.com/CompareGroup/elasticsearch-asg/cmd"   // Common logging setup func
 )
 
 // Request retry count/timeouts.

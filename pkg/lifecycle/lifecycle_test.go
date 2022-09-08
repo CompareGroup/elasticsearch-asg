@@ -17,7 +17,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/autoscaling"
 
-	"github.com/mintel/elasticsearch-asg/pkg/lifecycle/mocks" // Mocked AWS clients.
+	"github.com/CompareGroup/elasticsearch-asg/pkg/lifecycle/mocks" // Mocked AWS clients.
 )
 
 var (

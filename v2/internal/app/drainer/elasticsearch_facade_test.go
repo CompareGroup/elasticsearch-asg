@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/suite"     // Test suite.
 	gock "gopkg.in/h2non/gock.v1"           // HTTP request mocking.
 
-	"github.com/mintel/elasticsearch-asg/v2/internal/pkg/testutil" // Testing utilities.
-	"github.com/mintel/elasticsearch-asg/v2/pkg/es"                // Extensions to the Elasticsearch client.
+	"github.com/CompareGroup1/elasticsearch-asg/v2/internal/pkg/testutil" // Testing utilities.
+	"github.com/CompareGroup/elasticsearch-asg/v2/pkg/es"                 // Extensions to the Elasticsearch client.
 )
 
 type ElasticsearchFacadeTestSuite struct {

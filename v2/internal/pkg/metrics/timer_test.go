@@ -7,7 +7,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus" // Prometheus metrics.
 	"github.com/stretchr/testify/mock"               // Mocking for tests.
 
-	"github.com/mintel/elasticsearch-asg/v2/internal/pkg/metrics/mocks"
+	"github.com/CompareGroup/elasticsearch-asg/v2/internal/pkg/metrics/mocks"
 )
 
 func TestVecTimer_ObserveErr(t *testing.T) {

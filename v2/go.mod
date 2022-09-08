@@ -1,4 +1,4 @@
-module github.com/mintel/elasticsearch-asg/v2
+module github.com/CompareGroup/elasticsearch-asg/v2
 
 go 1.19
 

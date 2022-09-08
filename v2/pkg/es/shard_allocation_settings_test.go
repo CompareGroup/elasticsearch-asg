@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/assert" // Test assertions e.g. equality.
 	"github.com/tidwall/gjson"           // Dynamic JSON parsing.
 
-	"github.com/mintel/elasticsearch-asg/v2/internal/pkg/testutil" // Testing utilities.
+	"github.com/CompareGroup1/elasticsearch-asg/v2/internal/pkg/testutil" // Testing utilities.
 )
 
 func TestNewShardAllocationSettings(t *testing.T) {

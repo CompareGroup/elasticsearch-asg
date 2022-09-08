@@ -9,7 +9,7 @@ import (
 	"github.com/pkg/errors"                 // Wrap errors with stacktrace.
 	"golang.org/x/sync/errgroup"            // Cancel multiple goroutines if one fails.
 
-	"github.com/mintel/elasticsearch-asg/v2/pkg/es" // Extensions to the Elasticsearch client.
+	"github.com/CompareGroup/elasticsearch-asg/v2/pkg/es" // Extensions to the Elasticsearch client.
 )
 
 // ElasticsearchFacadeIface is an interface for Elasticsearch

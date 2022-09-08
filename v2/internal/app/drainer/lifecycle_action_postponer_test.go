@@ -10,7 +10,7 @@ import (
 	//"github.com/aws/aws-sdk-go-v2/aws"
 	//"github.com/aws/aws-sdk-go-v2/service/autoscaling"
 	//
-	//"github.com/mintel/elasticsearch-asg/v2/internal/app/drainer/mocks"
+	//"github.com/CompareGroup/elasticsearch-asg/v2/internal/app/drainer/mocks"
 )
 
 func TestLifecycleActionPostponer_Postpone(t *testing.T) {

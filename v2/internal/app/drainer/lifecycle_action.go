@@ -3,7 +3,7 @@ package drainer
 import (
 	"time"
 
-	"github.com/mintel/elasticsearch-asg/v2/pkg/events" // AWS CloudWatch Events.
+	"github.com/CompareGroup/elasticsearch-asg/v2/pkg/events" // AWS CloudWatch Events.
 )
 
 // LifecycleAction contains information about on on-going

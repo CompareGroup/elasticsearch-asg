@@ -9,8 +9,8 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/cloudwatch"
 
-	esasg "github.com/mintel/elasticsearch-asg"   // Complex Elasticsearch services
-	"github.com/mintel/elasticsearch-asg/pkg/str" // String utilities
+	esasg "github.com/CompareGroup/elasticsearch-asg"   // Complex Elasticsearch services
+	"github.com/CompareGroup/elasticsearch-asg/pkg/str" // String utilities
 )
 
 // MakeCloudwatchData returns a list of CloudWatch

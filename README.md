@@ -31,9 +31,9 @@ You need a working [Go >= 1.13 environment](https://golang.org/doc/install).
 Then clone this repository:
 
 ```sh
-mkdir -p $GOPATH/src/github.com/mintel/
-cd $GOPATH/src/github.com/mintel/
-git clone git@github.com:mintel/elasticsearch-asg.git
+mkdir -p $GOPATH/src/github.com/CompareGroup/
+cd $GOPATH/src/github.com/CompareGroup/
+git clone git@github.com:CompareGroup/elasticsearch-asg.git
 cd elasticsearch-asg
 ```
 
@@ -55,7 +55,7 @@ done
 
 ```sh
 for app in cloudwatcher drainer snapshooter throttler; do
-    docker build . -f "Dockerfile.$app" -t "mintel/elasticsearch-$app:latest"
+    docker build . -f "Dockerfile.$app" -t "CompareGroup/elasticsearch-$app:latest"
 done
 ```
 
@@ -84,7 +84,7 @@ git tag -a v1.2.3 -m "Release v1.2.3"
 git push --follow-tags
 ```
 
-Will build Docker images like `mintel/elasticsearch-cloudwatcher:1.2.3`.
+Will build Docker images like `CompareGroup/elasticsearch-cloudwatcher:1.2.3`.
 
 <!-- Links -->
 [AWS Target Tracing Scaling Policies]: https://docs.aws.amazon.com/autoscaling/ec2/userguide/as-scaling-target-tracking.html

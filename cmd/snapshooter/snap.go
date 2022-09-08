@@ -3,7 +3,7 @@ package main
 import (
 	"time"
 
-	ptime "github.com/mintel/elasticsearch-asg/pkg/time" // Time utilities
+	ptime "github.com/CompareGroup/elasticsearch-asg/pkg/time" // Time utilities
 )
 
 // SnapshotWindow represents how often to take Elasticsearch snapshots,

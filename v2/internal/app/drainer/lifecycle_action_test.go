@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert" // Test assertions e.g. equality.
 
-	"github.com/mintel/elasticsearch-asg/v2/pkg/events" // AWS CloudWatch Events.
+	"github.com/CompareGroup/elasticsearch-asg/v2/pkg/events" // AWS CloudWatch Events.
 )
 
 func TestNewLifecycleAction(t *testing.T) {

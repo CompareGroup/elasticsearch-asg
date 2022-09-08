@@ -6,7 +6,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus" // Prometheus metrics.
 	kingpin "gopkg.in/alecthomas/kingpin.v2"         // Command line flag parsing.
 
-	"github.com/mintel/elasticsearch-asg/v2/internal/app/drainer" // App implementation.
+	"github.com/CompareGroup/elasticsearch-asg/v2/internal/app/drainer" // App implementation.
 )
 
 func main() {

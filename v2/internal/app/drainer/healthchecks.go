@@ -1,7 +1,7 @@
 package drainer
 
 import (
-	"github.com/mintel/healthcheck"                  // Healthchecks framework.
+	"github.com/mintel/healthcheck"           // Healthchecks framework.
 	"github.com/pkg/errors"                          // Wrap errors with stacktrace.
 	"github.com/prometheus/client_golang/prometheus" // Prometheus metrics.
 )

@@ -8,7 +8,7 @@ import (
 	"github.com/heptiolabs/healthcheck" // Healthchecks framework
 	"go.uber.org/zap"                   // Logging
 
-	"github.com/mintel/elasticsearch-asg/pkg/es" // Extensions to the Elasticsearch client
+	"github.com/CompareGroup/elasticsearch-asg/pkg/es" // Extensions to the Elasticsearch client
 )
 
 // CheckReadyRollingUpgrade checks that Elasticsearch has recovered from a rolling upgrade.

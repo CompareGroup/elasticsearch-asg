@@ -6,7 +6,7 @@ import (
 
 	kingpin "gopkg.in/alecthomas/kingpin.v2" // Command line flag parsing.
 
-	"github.com/mintel/elasticsearch-asg/v2/internal/pkg/cmd" // Common command line app tools.
+	"github.com/CompareGroup/elasticsearch-asg/v2/internal/pkg/cmd" // Common command line app tools.
 )
 
 const (

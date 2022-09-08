@@ -42,5 +42,6 @@ type EC2SpotInterruption struct {
 	InstanceID string `json:"instance-id"`
 
 	// One of: "hibernate", "stop", "terminate".
-	InstanceAction string `json:"instance-action"`
+	InstanceAction string `json:"instance-action,omitempty"`
 }
+

@@ -1,6 +1,6 @@
 package cmd
 
-// CGFlags represents a set of flags custom to comparegroup
+// CGFlags represents a set of flags custom to CompareGroup
 type CGFlags struct {
 	// Name of Elastic cluster to find nodes in.
 	ClusterName string

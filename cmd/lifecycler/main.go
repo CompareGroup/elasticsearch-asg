@@ -20,11 +20,11 @@ import (
 	"github.com/aws/aws-sdk-go/service/autoscaling"
 	"github.com/aws/aws-sdk-go/service/sqs"
 
-	esasg "github.com/mintel/elasticsearch-asg"         // Complex Elasticsearch services
-	"github.com/mintel/elasticsearch-asg/cmd"           // Common logging setup func
-	"github.com/mintel/elasticsearch-asg/pkg/es"        // Elasticsearch client extensions
-	"github.com/mintel/elasticsearch-asg/pkg/lifecycle" // Handle AWS Autoscaling Group lifecycle hook event messages.
-	"github.com/mintel/elasticsearch-asg/pkg/squeues"   // SQS message dispatcher
+	esasg "github.com/CompareGroup/elasticsearch-asg"         // Complex Elasticsearch services
+	"github.com/CompareGroup/elasticsearch-asg/cmd"           // Common logging setup func
+	"github.com/CompareGroup/elasticsearch-asg/pkg/es"        // Elasticsearch client extensions
+	"github.com/CompareGroup/elasticsearch-asg/pkg/lifecycle" // Handle AWS Autoscaling Group lifecycle hook event messages.
+	"github.com/CompareGroup/elasticsearch-asg/pkg/squeues"   // SQS message dispatcher
 )
 
 // Request retry count/timeouts.

@@ -6,6 +6,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"go.uber.org/zap"
+	"strings"
 )
 
 // Ec2Instances represents the ec2 instances that are returned as result
@@ -30,16 +31,16 @@ type EC2Instance struct {
 	InstanceName string
 }
 
-func NewDescribeEC2Action(action DescribeEC2Action) map[string]EC2Instance {
+func NewDescribeEC2Action(action DescribeEC2Action) (map[string]EC2Instance, error) {
 
 	result, err := GetInstances(context.TODO(), action.client, action.params)
 	if err != nil {
-		action.logger.Fatal("Got an error retrieving information about your Amazon EC2 instances:",
+		action.logger.Warn("Got an error retrieving information about your Amazon EC2 instances:",
 			zap.Error(err))
 	}
 	if len(result.Reservations) == 0 {
 		action.logger.Info("node with instance id: " + action.params.InstanceIds[0] + " is not part of this cluster")
-		return make(map[string]EC2Instance)
+		return make(map[string]EC2Instance), nil
 	}
 
 	ec2Instances := make(map[string]EC2Instance, len(action.params.InstanceIds))
@@ -51,34 +52,53 @@ func NewDescribeEC2Action(action DescribeEC2Action) map[string]EC2Instance {
 		rids[i] = *r.ReservationId
 		action.logger.Info("Instance IDs:")
 		for j, instance := range r.Instances {
-			action.logger.Info("   " + *instance.InstanceId)
-			action.logger.Info("   " + *instance.PrivateIpAddress)
-			ips[j] = *instance.PrivateIpAddress
-			var nt string
-			for _, t := range instance.Tags {
-				if *t.Key == "Name" {
-					nt = *t.Value
-					break
+			if strings.EqualFold(string(instance.State.Name), "running") {
+				action.logger.Info("   " + *instance.InstanceId)
+				if &instance.PrivateIpAddress != nil {
+					action.logger.Info("   " + *instance.PrivateIpAddress)
+					ips[j] = *instance.PrivateIpAddress
 				}
-			}
-			action.logger.Info(string("   " + instance.State.Name))
-			action.logger.Info("    " + nt)
-			names[j] = nt
+				var nt string
+				for _, t := range instance.Tags {
+					if *t.Key == "Name" {
+						nt = *t.Value
+						break
+					}
+				}
+				action.logger.Info(string("   " + instance.State.Name))
+				action.logger.Info("    " + nt)
+				names[j] = nt
 
-			ec2Instances[*instance.InstanceId] = EC2Instance{
-				ReservationId:    *r.ReservationId,
-				InstanceId:       *instance.InstanceId,
-				PrivateIPAddress: *instance.PrivateIpAddress,
-				InstanceName:     nt,
+				ec2Instances[*instance.InstanceId] = EC2Instance{
+					ReservationId:    *r.ReservationId,
+					InstanceId:       *instance.InstanceId,
+					PrivateIPAddress: *instance.PrivateIpAddress,
+					InstanceName:     nt,
+				}
+			} else {
+				var nt string
+				for _, t := range instance.Tags {
+					if *t.Key == "Name" {
+						nt = *t.Value
+						break
+					}
+				}
+
+				ec2Instances[*instance.InstanceId] = EC2Instance{
+					ReservationId:    *r.ReservationId,
+					InstanceId:       *instance.InstanceId,
+					PrivateIPAddress: "",
+					InstanceName:     nt,
+				}
 			}
 
 		}
 
 	}
-	return ec2Instances
+	return ec2Instances, err
 }
 
-func getPrivateIps(client *ec2.Client, logger *zap.Logger, clusterName string, instanceIds []string) []string {
+func getPrivateIps(client *ec2.Client, logger *zap.Logger, clusterName string, instanceIds []string) ([]string, error) {
 	filter := types.Filter{}
 	if clusterName != "" {
 		filter = types.Filter{
@@ -101,13 +121,38 @@ func getPrivateIps(client *ec2.Client, logger *zap.Logger, clusterName string, i
 		params: params,
 	}
 
-	ec2Instances := NewDescribeEC2Action(action)
+	ec2Instances, err := NewDescribeEC2Action(action)
 	privateIps := make([]string, 0, len(ec2Instances))
 	for _, value := range ec2Instances {
 		privateIps = append(privateIps, value.PrivateIPAddress)
 	}
-	return privateIps
+	return privateIps, err
 }
+
+func getInstances(client *ec2.Client, logger *zap.Logger, clusterName string, instanceIds []string) (map[string]EC2Instance, error) {
+	filter := types.Filter{}
+	if clusterName != "" {
+		filter = types.Filter{
+			Name:   aws.String("tag:Name"),
+			Values: []string{*aws.String(clusterName + "*")},
+		}
+	}
+
+	params := &ec2.DescribeInstancesInput{
+		DryRun: new(bool),
+		Filters:     []types.Filter{filter},
+		InstanceIds: instanceIds,
+	}
+
+	action := DescribeEC2Action{
+		logger: logger,
+		client: client,
+		params: params,
+	}
+
+	return NewDescribeEC2Action(action)
+}
+
 
 // EC2DescribeInstancesAPI defines the interface for the DescribeInstances function.
 // We use this interface to test the function using a mocked service.

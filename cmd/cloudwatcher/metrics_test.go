@@ -16,9 +16,9 @@ import (
 	"github.com/aws/aws-sdk-go/service/cloudwatch"
 	"github.com/aws/aws-sdk-go/service/ec2"
 
-	esasg "github.com/mintel/elasticsearch-asg"                  // Complex Elasticsearch services
-	"github.com/mintel/elasticsearch-asg/cmd/cloudwatcher/mocks" // Mocked AWS client(s)
-	"github.com/mintel/elasticsearch-asg/pkg/str"                // String utilities
+	esasg "github.com/CompareGroup/elasticsearch-asg"                  // Complex Elasticsearch services
+	"github.com/CompareGroup/elasticsearch-asg/cmd/cloudwatcher/mocks" // Mocked AWS client(s)
+	"github.com/CompareGroup/elasticsearch-asg/pkg/str"                // String utilities
 )
 
 const (

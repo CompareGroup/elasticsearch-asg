@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"github.com/mintel/healthcheck"                  // Healthchecks framework.
+	"github.com/mintel/healthcheck"           // Healthchecks framework.
 	"github.com/prometheus/client_golang/prometheus" // Prometheus metrics.
 )
 

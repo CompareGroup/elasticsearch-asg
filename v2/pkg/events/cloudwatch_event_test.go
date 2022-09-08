@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert" // Test assertions e.g. equality.
 
-	"github.com/mintel/elasticsearch-asg/v2/pkg/events" // AWS CloudWatch Events.
+	"github.com/CompareGroup/elasticsearch-asg/v2/pkg/events" // AWS CloudWatch Events.
 )
 
 func Example() {
@@ -35,6 +35,31 @@ func Example() {
 	fmt.Println(e.Detail.(*events.EC2SpotInterruption).InstanceID)
 	// Output: i-1234567890abcdef0
 }
+
+func ExampleNotification() {
+	msg := `{
+		"version": "0",
+		"id": "12345678-1234-1234-1234-123456789012",
+		"detail-type": "EC2 Instance Rebalance Recommendation",
+		"source": "aws.ec2",
+		"account": "123456789012",
+		"time": "2019-09-26T12:55:24Z",
+		"region": "us-east-2",
+		"resources": ["arn:aws:ec2:us-east-2:123456789012:instance/i-1234567890abcdef0"],
+		"detail": {
+			"instance-id": "i-1234567890abcdef0"
+		}
+	}`
+
+	e := &events.CloudWatchEvent{}
+	if err := json.Unmarshal([]byte(msg), e); err != nil {
+		panic(err)
+	}
+
+	fmt.Println(e.Detail.(*events.EC2SpotNotification).InstanceID)
+	// Output: i-1234567890abcdef0
+}
+
 
 func ExampleRegisterDetailType() {
 	// MyDetailType is a custom CloudWatch Event type.

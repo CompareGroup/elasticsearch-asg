@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"    // Test assertion e.g. equality
 	gock "gopkg.in/h2non/gock.v1"           // HTTP endpoint mocking
 
-	"github.com/mintel/elasticsearch-asg/pkg/es" // Elasticsearch client extensions
+	"github.com/CompareGroup/elasticsearch-asg/pkg/es" // Elasticsearch client extensions
 )
 
 func TestCheckReadyRollingUpgrade_passing(t *testing.T) {

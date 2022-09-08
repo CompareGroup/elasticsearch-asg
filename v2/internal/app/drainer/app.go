@@ -2,6 +2,8 @@ package drainer
 
 import (
 	"context"
+	"github.com/CompareGroup/elasticsearch-asg/v2/internal/pkg/cmd"
+	"github.com/CompareGroup/elasticsearch-asg/v2/pkg/events"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go/aws/defaults"
 	"net/http"
@@ -22,9 +24,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/autoscaling"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 
-	"github.com/mintel/elasticsearch-asg/v2/internal/pkg/cmd"     // Common command line app tools.
-	"github.com/mintel/elasticsearch-asg/v2/internal/pkg/metrics" // Prometheus metrics tools.
-	"github.com/mintel/elasticsearch-asg/v2/pkg/events"           // AWS CloudWatch Events.
+	// Common command line app tools.
+	"github.com/CompareGroup/elasticsearch-asg/v2/internal/pkg/metrics" // Prometheus metrics tools.
+	// AWS CloudWatch Events.
 )
 
 const (
@@ -175,11 +177,15 @@ func (app *App) Main(g prometheus.Gatherer) {
 
 	// Start consuming CloudWatch events from SQS.
 	eg.Go(func() error {
+
 		e := NewCloudWatchEventEmitter(
 			*app.clients.SQS,
 			app.flags.Queue.String(),
 			app.events,
-		)
+			app.clients.EC2,
+			app.logger,
+			app.flags.ClusterName,
+			)
 		e.Received = app.inst.MessagesReceived
 		return e.Run(ctx)
 	})
@@ -190,6 +196,15 @@ func (app *App) Main(g prometheus.Gatherer) {
 	spotInterruptionEvents := batchEvents(
 		app.events.On(
 			topicKey("aws.ec2", "EC2 Spot Instance Interruption Warning"),
+		),
+		make(chan []emitter.Event, 1), // Channel for the batches.
+		10*time.Millisecond,           // Wait 10ms for more events to come in before returning batch.
+		20,                            // Batch size of at most 20.
+	)
+
+	spotNotificationEvents := batchEvents(
+		app.events.On(
+			topicKey("aws.ec2", "EC2 Instance Rebalance Recommendation"),
 		),
 		make(chan []emitter.Event, 1), // Channel for the batches.
 		10*time.Millisecond,           // Wait 10ms for more events to come in before returning batch.
@@ -220,6 +235,21 @@ loop:
 				cwes[i] = e.Args[0].(*events.CloudWatchEvent)
 				logger.Info("got spot interruption cloudwatch event",
 					zap.String("instance", cwes[i].Detail.(*events.EC2SpotInterruption).InstanceID))
+			}
+			eg.Go(func() error {
+				return app.handleSpotInterruptionEvent(ctx, cwes)
+			})
+
+		case batch, ok := <-spotNotificationEvents:
+			app.inst.MessagesReceived.Add(float64(len(batch)))
+			if !ok {
+				logger.Panic("event listener closed")
+			}
+			cwes := make([]*events.CloudWatchEvent, len(batch))
+			for i, e := range batch {
+				cwes[i] = e.Args[0].(*events.CloudWatchEvent)
+				logger.Info("got spot interruption cloudwatch event",
+					zap.String("instance", cwes[i].Detail.(*events.EC2SpotNotification).InstanceID))
 			}
 			eg.Go(func() error {
 				return app.handleSpotInterruptionEvent(ctx, cwes)
@@ -259,7 +289,22 @@ func (app *App) handleSpotInterruptionEvent(ctx context.Context, batch []*events
 		ids[i] = d.InstanceID
 	}
 
-	privateIps := getPrivateIps(app.clients.EC2, app.logger, app.flags.ClusterName, ids)
+	privateIps, _ := getPrivateIps(app.clients.EC2, app.logger, app.flags.ClusterName, ids)
+
+	return app.clients.ElasticsearchFacade.DrainNodes(ctx, privateIps)
+}
+
+// handleSpotNotificationEvent handles a spot instance rebalance notice from
+// CloudWatch events by draining the node. Here we have a bit more time to drain the node compared
+// to the 2 minutes we have with the spot instance interruption notice
+func (app *App) handleSpotNotificationEvent(ctx context.Context, batch []*events.CloudWatchEvent) error {
+	ids := make([]string, len(batch))
+	for i, e := range batch {
+		d := e.Detail.(*events.EC2SpotNotification)
+		ids[i] = d.InstanceID
+	}
+
+	privateIps, _ := getPrivateIps(app.clients.EC2, app.logger, app.flags.ClusterName, ids)
 
 	return app.clients.ElasticsearchFacade.DrainNodes(ctx, privateIps)
 }
@@ -275,7 +320,7 @@ func (app *App) handleLifecycleTerminateActionEvent(ctx context.Context, e *even
 		return err
 	}
 
-	privateIps := getPrivateIps(app.clients.EC2, app.logger, app.flags.ClusterName, []string{a.InstanceID})
+	privateIps, _ := getPrivateIps(app.clients.EC2, app.logger, app.flags.ClusterName, []string{a.InstanceID})
 
 	zap.L().Info("draining node", zap.String("node", a.InstanceID))
 	err = app.clients.ElasticsearchFacade.DrainNodes(ctx, privateIps)
@@ -312,7 +357,7 @@ func (app *App) handleLifecycleTerminateActionEvent(ctx context.Context, e *even
 		defer postponeCancel()
 		select {
 		case <-postponeCtx.Done():
-			// This might happend if the lifecycle action global
+			// This might happen if the lifecycle action global
 			// timeout is reached.
 			return
 

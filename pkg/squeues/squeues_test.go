@@ -23,7 +23,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/sqs"
 
-	"github.com/mintel/elasticsearch-asg/pkg/squeues/mocks" // Mocked interfaces
+	"github.com/CompareGroup/elasticsearch-asg/pkg/squeues/mocks" // Mocked interfaces
 )
 
 const (

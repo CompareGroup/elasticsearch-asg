@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"    // Test assertions e.g. equality.
 	gock "gopkg.in/h2non/gock.v1"           // HTTP request mocking.
 
-	"github.com/mintel/elasticsearch-asg/v2/internal/pkg/testutil" // Testing utilities.
+	"github.com/CompareGroup1/elasticsearch-asg/v2/internal/pkg/testutil" // Testing utilities.
 )
 
 func TestClusterGetSettingsService(t *testing.T) {
